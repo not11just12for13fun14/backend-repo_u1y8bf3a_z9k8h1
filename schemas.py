@@ -1,48 +1,68 @@
 """
-Database Schemas
+Database Schemas for SaaS Doctor Booking
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
+Each Pydantic model represents a collection in MongoDB.
+Collection name is the lowercase class name (e.g., Clinic -> "clinic").
 
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Roles:
+- super_admin: Manages the whole platform and all clinics
+- clinic_admin: Manages a single clinic and its doctors/schedules
+- doctor: Provides availabilities and receives appointments
+- patient: Books appointments
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List, Literal
+from datetime import datetime
 
-# Example schemas (replace with your own):
+# Core
+class Clinic(BaseModel):
+    name: str = Field(..., description="Clinic name")
+    address: Optional[str] = Field(None, description="Clinic address")
+    phone: Optional[str] = Field(None, description="Contact phone")
+    description: Optional[str] = Field(None, description="Short description")
+    logo_url: Optional[str] = Field(None, description="Logo URL")
 
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    full_name: str = Field(..., description="Full name")
+    email: EmailStr = Field(..., description="Unique email")
+    role: Literal['super_admin', 'clinic_admin', 'doctor', 'patient']
+    clinic_id: Optional[str] = Field(None, description="Assigned clinic for clinic_admin/doctor/patient")
+    is_active: bool = Field(True)
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+class DoctorProfile(BaseModel):
+    user_id: str = Field(..., description="Reference to user (doctor)")
+    clinic_id: str = Field(..., description="Clinic reference")
+    specialty: str = Field(..., description="Medical specialty")
+    bio: Optional[str] = None
+    experience_years: Optional[int] = Field(ge=0, default=None)
+    photo_url: Optional[str] = None
 
-# Add your own schemas here:
-# --------------------------------------------------
+class PatientProfile(BaseModel):
+    user_id: str = Field(..., description="Reference to user (patient)")
+    clinic_id: Optional[str] = Field(None, description="Preferred clinic")
+    date_of_birth: Optional[str] = None
+    insurance_provider: Optional[str] = None
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class Availability(BaseModel):
+    doctor_id: str = Field(..., description="Doctor user_id")
+    clinic_id: str = Field(..., description="Clinic reference")
+    weekday: Literal[0,1,2,3,4,5,6] = Field(..., description="0=Monday .. 6=Sunday")
+    start_time: str = Field(..., description="HH:MM 24h")
+    end_time: str = Field(..., description="HH:MM 24h")
+
+class Appointment(BaseModel):
+    clinic_id: str
+    doctor_id: str
+    patient_id: str
+    start_datetime: datetime
+    end_datetime: datetime
+    status: Literal['pending','confirmed','completed','cancelled'] = 'pending'
+    notes: Optional[str] = None
+
+# Lightweight response helpers (optional)
+class IdResponse(BaseModel):
+    id: str
+
+class MessageResponse(BaseModel):
+    message: str
